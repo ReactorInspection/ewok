@@ -206,6 +206,10 @@ class UniformBSpline3DOptimization {
     cp_opt_start_idx = n;
   }
 
+  void getOptimizedPoints(geometry_msgs::PoseArray &optimized_points, _Scalar ddt = 0.1) {
+    spline_.getOptimizedPoints(optimized_points, cp_opt_start_idx, num_cp_opt, ddt);
+  }
+
   void getMarkers(visualization_msgs::MarkerArray & traj_marker,
                   const std::string & ns = "spline_opitimization_markers",
                   const Vector3 & color1 = Vector3(0,1,0),
@@ -215,6 +219,11 @@ class UniformBSpline3DOptimization {
 
     spline_.getVisualizationMarker(traj_marker.markers[0], ns, 0, color1, cp_opt_start_idx, num_cp_opt, color2);
     spline_.getControlPointsMarker(traj_marker.markers[1], ns, 1, color1, cp_opt_start_idx, num_cp_opt, color2);
+
+    ros::Time tim = ros::Time::now();
+    traj_marker.markers[0].header.stamp = tim;
+    traj_marker.markers[1].header.stamp = tim;
+    //spline_.getVelocityMarkers(traj_marker, "vel_marker", 2, Vector3(1,0,0), cp_opt_start_idx, num_cp_opt, Vector3(0,0,1));
   }
 
   void setTargetEnpoint(const Vector3 & p) {

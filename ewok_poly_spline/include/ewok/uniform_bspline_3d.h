@@ -28,7 +28,9 @@
 
 #include <ewok/uniform_bspline.h>
 
-#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
+#include <tf/transform_datatypes.h>
+#include <geometry_msgs/PoseArray.h>
 
 #include <vector>
 #include <memory>
@@ -206,6 +208,94 @@ class UniformBSpline3D {
     return dt_;
   }
 
+  void getOptimizedPoints(geometry_msgs::PoseArray &optimized_points, int fixed_id = -_N, int num_points = 0, _Scalar ddt = 0.1) {
+    // Time for which optimization doesn't change the point.
+    _Scalar min_fixed_t = (fixed_id - _N/2) * dt_;
+    _Scalar max_fixed_t = (fixed_id + num_points + _N/2) * dt_;
+
+    for (_Scalar time = min_fixed_t; time < max_fixed_t; time += ddt) {
+      Vector3 ps = evaluate(time, 0);
+      geometry_msgs::Pose p;
+      p.position.x = ps[0];
+      p.position.y = ps[1];
+      p.position.z = ps[2];
+
+      //Get first derivative
+      Vector3 v = evaluate(time, 1);
+      //TODO check for atan2 domain error
+      double yaw_dir = std::atan2(v[1], v[0]);
+      tf::Quaternion q = tf::createQuaternionFromRPY(0, 0, yaw_dir);
+      tf::quaternionTFToMsg(q, p.orientation);
+
+      optimized_points.poses.push_back(p);
+    }
+  }
+
+  void getVelocityMarkers(visualization_msgs::MarkerArray & traj_marker, const std::string & ns,
+                              int id, const Eigen::Vector3d & color, int fixed_id = -_N, int num_points = 0,
+                              const Eigen::Vector3d & fixed_color = Eigen::Vector3d(1,1,1), _Scalar ddt = 0.1,
+                              const ros::Duration & lifetime = ros::Duration(0), _Scalar scale = 0.05) {
+
+    visualization_msgs::Marker vel_marker;
+    vel_marker.header.frame_id = "world";
+    vel_marker.ns = ns;
+    vel_marker.id = id;
+    vel_marker.type = visualization_msgs::Marker::ARROW;
+    vel_marker.action = visualization_msgs::Marker::MODIFY;
+    vel_marker.scale.x = 0.05;
+    vel_marker.scale.y = 0.01;
+    vel_marker.scale.z = 0.02;
+    vel_marker.color.a = 1.0;
+
+    vel_marker.lifetime = lifetime;
+
+    vel_marker.color.r = color(0);
+    vel_marker.color.g = color(1);
+    vel_marker.color.b = color(2);
+
+    std_msgs::ColorRGBA c0, c1;
+    c0.r = color(0);
+    c0.g = color(1);
+    c0.b = color(2);
+    c0.a = 1.0;
+
+    c1.r = fixed_color(0);
+    c1.g = fixed_color(1);
+    c1.b = fixed_color(2);
+    c1.a = 1.0;
+
+    // Time for which optimization doesn't change the point.
+    _Scalar min_fixed_t = (fixed_id - _N/2) * dt_;
+    _Scalar max_fixed_t = (fixed_id + num_points + _N/2) * dt_;
+
+    for (_Scalar time = splines_[0].minValidTime(); time < splines_[0].maxValidTime(); time += ddt) {
+      Vector3 ps = evaluate(time, 0);
+
+      vel_marker.pose.position.x = ps[0];
+      vel_marker.pose.position.y = ps[1];
+      vel_marker.pose.position.z = ps[2];
+
+      //Get first derivative
+      Vector3 v = evaluate(time, 1);
+      //TODO check for atan2 domain error
+      double yaw_dir = std::atan2(v[1], v[0]);
+
+      tf::Quaternion q = tf::createQuaternionFromRPY(0, 0, yaw_dir);
+      tf::quaternionTFToMsg(q, vel_marker.pose.orientation);
+
+      if(time >= min_fixed_t && time < max_fixed_t) {
+        vel_marker.colors.push_back(c0);
+        //  ROS_INFO("r %g p %g y %g", v[0], v[1], v[2]);
+      } else {
+        vel_marker.colors.push_back(c1);
+      }
+
+      traj_marker.markers.push_back(vel_marker);
+
+      vel_marker.id += 1;
+    }
+
+  }
 
   void getVisualizationMarker(visualization_msgs::Marker & traj_marker, const std::string & ns,
                               int id, const Eigen::Vector3d & color, int fixed_id = -_N, int num_points = 0,
